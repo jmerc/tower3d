@@ -1,7 +1,7 @@
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2008
 
-Project("{F109E5CE-BCB0-B96C-1AE4-C179D772A99A}") = "Tower3d", "Assembly-CSharp.csproj", "{4DF81973-058F-6B2C-36FB-F3A98253CF3E}"
+Project("{F109E5CE-BCB0-B96C-1AE4-C179D772A99A}") = "Tower3d", "Assembly-CSharp-vs.csproj", "{4DF81973-058F-6B2C-36FB-F3A98253CF3E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,7 +17,7 @@ Global
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
-		GlobalSection(MonoDevelopProperties) = preSolution
+			GlobalSection(MonoDevelopProperties) = preSolution
 		StartupItem = Assembly-CSharp.csproj
 		Policies = $0
 		$0.TextStylePolicy = $1

@@ -123,7 +123,10 @@ public class Blueprint : MonoBehaviour {
     {
         if (currentMouseMode == Tool.Place && newObject != null)
         {
-
+			if (point == mouseStart)
+			{
+				Destroy(newObject);
+			}
         }
 
         newObject = null;
