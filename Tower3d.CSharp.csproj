@@ -65,6 +65,8 @@
   <ItemGroup>
     <Compile Include="Assets\_Project\Code\GameManager.cs" />
     <Compile Include="Assets\_Project\Planning\Code\Blueprint.cs" />
+    <Compile Include="Assets\_Project\Planning\Code\Wall.cs" />
+    <Compile Include="Assets\_Shared\Code\DCEL.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\SyntaxTree\UnityVS\2015\UnityVS.CSharp.targets" />
 </Project>
