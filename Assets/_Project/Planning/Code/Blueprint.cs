@@ -82,7 +82,6 @@ public class Blueprint : MonoBehaviour {
             {
                 if (hitInfo.collider == childTransform.gameObject.GetComponent<Collider>())
                 {
-                    Debug.Log("Mouse hit on child[" + childTransform.name + "]: " + hitInfo.point);
                     point = hitInfo.point;
                     point.y = 0;  // Flatten point in case it's hitting on a wall
                     if (SnapToGrid)
@@ -101,7 +100,15 @@ public class Blueprint : MonoBehaviour {
 
     private Vector3 SnapPoint(Vector3 point, GameObject gameObject)
     {
-        return SnapPointToGrid(point);
+        Wall wall = gameObject.GetComponent<Wall>();
+        if (wall == null)
+        {
+            return SnapPointToGrid(point);
+        }
+        else
+        {
+            return wall.NearestPoint(point);
+        }
     }
 
     private Vector3 SnapPointToGrid(Vector3 point)
@@ -121,8 +128,8 @@ public class Blueprint : MonoBehaviour {
 
     void ToolStart(Vector3 point)
     {
-        mouseStart = SnapPointToGrid(point);
-        Debug.Log("ToolStart - " + point + " -> " + mouseStart);
+        mouseStart = point;
+        Debug.Log("ToolStart - " + point);
 
         // Determine which tool we are using
         currentMouseMode = Tool.Place;
@@ -131,6 +138,7 @@ public class Blueprint : MonoBehaviour {
         newObject.transform.parent = gameObject.transform;
         newObject.transform.Translate(mouseStart);
         newObject.transform.localScale = new Vector3(0, 1, 1);
+        newObject.GetComponent<Collider>().enabled = false;
     }
 
     void ToolUpdate(Vector3 point)
@@ -146,6 +154,8 @@ public class Blueprint : MonoBehaviour {
 
     void ToolEnd(Vector3 point)
     {
+        Debug.Log("ToolEnd - " + mouseStart + " -> " + point);
+
         if (currentMouseMode == Tool.Place && newObject != null)
         {
             // Determine if we're keeping newObject
