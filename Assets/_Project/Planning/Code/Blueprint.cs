@@ -16,10 +16,12 @@ public class Blueprint : MonoBehaviour {
     private Tool currentMouseMode;
     private Vector3 mouseStart;
     private GameObject newObject;
+    private bool newObjectValid;
 
     private GameObject paper;
     private DCEL lines;
     private List<GameObject> walls;
+    private List<GameObject> floors;
 
     void Awake()
     {
@@ -27,6 +29,7 @@ public class Blueprint : MonoBehaviour {
         currentMouseMode = Tool.None;
         lines = new DCEL();
         walls = new List<GameObject>();
+        floors = new List<GameObject>();
     }
 
     // Called after all objects are Awake
@@ -101,7 +104,7 @@ public class Blueprint : MonoBehaviour {
     private Vector3 SnapPoint(Vector3 point, GameObject gameObject)
     {
         Wall wall = gameObject.GetComponent<Wall>();
-        if (wall == null)
+        if (wall == null || wall.Edge == null)
         {
             return SnapPointToGrid(point);
         }
@@ -129,42 +132,63 @@ public class Blueprint : MonoBehaviour {
     void ToolStart(Vector3 point)
     {
         mouseStart = point;
-        Debug.Log("ToolStart - " + point);
+        //Debug.Log("ToolStart - " + point);
 
         // Determine which tool we are using
         currentMouseMode = Tool.Place;
         // Create a new instance of a wall
         newObject = Instantiate<GameObject>(WallObject);
-        newObject.transform.parent = gameObject.transform;
+       //newObject.transform.parent = gameObject.transform;  // Not sure what I get for doing this
         newObject.transform.Translate(mouseStart);
         newObject.transform.localScale = new Vector3(0, 1, 1);
         newObject.GetComponent<Collider>().enabled = false;
+        newObjectValid = true;
     }
 
     void ToolUpdate(Vector3 point)
     {
+        // TODO - only update if previous point was different
         // TODO: switch statement?
         if (currentMouseMode == Tool.Place && newObject != null)
         {
             // Transform wall so it matches this point
+            float length = Vector3.Distance(mouseStart, point);
             newObject.transform.rotation = Quaternion.FromToRotation(Vector3.right, point - mouseStart);
-            newObject.transform.localScale = new Vector3(Vector3.Distance(mouseStart, point), 1, 1);
+            newObject.transform.localScale = new Vector3(length, 1, 1);
+            // Determine if this wall is valid (TODO: This should be checked in the DCEL itself)
+            Collider[] colliders = Physics.OverlapBox((point + mouseStart) / 2 + new Vector3(0, 0.2f, 0), new Vector3(length / 2 - 0.4f, 0.01f, 0.01f), newObject.transform.rotation);
+            if (colliders.Length > 1)
+            {
+                newObjectValid = false;
+                // Tint red
+                GameObject wall = newObject.transform.GetChild(0).gameObject;
+                wall.GetComponent<Renderer>().material.color = Color.red;
+            }
+            else
+            {
+                newObjectValid = true;
+                // Remove tint
+                GameObject wall = newObject.transform.GetChild(0).gameObject;
+                wall.GetComponent<Renderer>().material.color = Color.white;
+
+            }
         }
     }
 
     void ToolEnd(Vector3 point)
     {
-        Debug.Log("ToolEnd - " + mouseStart + " -> " + point);
+        //Debug.Log("ToolEnd - " + mouseStart + " -> " + point);
 
         if (currentMouseMode == Tool.Place && newObject != null)
         {
             // Determine if we're keeping newObject
-            if (point != mouseStart)
+            if (point != mouseStart && newObjectValid == true)
             {
                 // Create a new edge in the DCEL
                 lines.CreateEdge(mouseStart.x, mouseStart.z, point.x, point.z);
                 // Render any DCEL changes
                 RedrawWalls();
+                RedrawFloors();
             }        
         }
 
@@ -213,5 +237,68 @@ public class Blueprint : MonoBehaviour {
         wall.GetComponent<Wall>().Edge = edge;
     }
 
+    private void RedrawFloors()
+    {
+        IEnumerator<GameObject> floorEnumerator = floors.GetEnumerator();
+        // wallEnumerator.Reset();
+        GameObject floor;
+        List<GameObject> newFloors = new List<GameObject>();
+
+        foreach (DCEL.Face face in lines.Faces)
+        {
+            if (floorEnumerator.MoveNext() == true)
+            {
+                floor = floorEnumerator.Current;
+            }
+            else
+            {
+                floor = new GameObject("Floor");
+                floor.transform.parent = gameObject.transform;
+                newFloors.Add(floor);
+            }
+            DrawFloors(floor, face);
+        }
+        floorEnumerator.Dispose();
+        floors.AddRange(newFloors);
+    }
+
+    private void DrawFloors(GameObject floor, DCEL.Face face)
+    {
+        // Create an array of Vectors based on the points in face
+        List<DCEL.HalfEdge> edges = face.Edges;
+        Vector2[] faceVertices = new Vector2[edges.Count];
+
+        for (int i = 0; i < edges.Count; i++)
+        {
+            faceVertices[i] = new Vector2(edges[i].Origin.X, edges[i].Origin.Y);
+        }
+        Triangulator tr = new Triangulator(faceVertices);
+        int[] indices = tr.Triangulate();
+       
+        // Create the Vector3 vertices
+        Vector3[] vertices = new Vector3[faceVertices.Length];
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            vertices[i] = new Vector3(faceVertices[i].x, 0.1f, faceVertices[i].y);
+        }
+
+        // Create the mesh
+        Mesh msh = new Mesh();
+        msh.vertices = vertices;
+        msh.triangles = indices;
+        msh.RecalculateNormals();
+        msh.RecalculateBounds();
+
+        // Set up game object with mesh;
+        MeshRenderer renderer = floor.GetComponent<MeshRenderer>();
+        if (renderer == null) { renderer = floor.AddComponent<MeshRenderer>(); }
+
+        MeshFilter filter = floor.GetComponent<MeshFilter>();
+        if (filter == null) { filter = floor.AddComponent<MeshFilter>(); }
+        //filter.mesh.Clear(); - proably not needed
+        filter.mesh = msh;
+
+        renderer.material.color = Color.white;
+    }
 
 }

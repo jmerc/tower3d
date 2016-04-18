@@ -46,15 +46,71 @@ public class DCEL
             Next = next;
             Rendered = false;
         }
+
+        override public string ToString()
+        {
+            string output = Origin.ToString() + "->";
+            if (Twin != null)
+            {
+                output += Twin.Origin.ToString();
+            }
+            else
+            {
+                output += "???";
+            }
+
+            if (Next != null && Next.Twin != null)
+            {
+                output += "=>" + Next.Twin.Origin.ToString();
+            }
+            if (Face != null)
+            {
+                output += "[" + Face.ToString() + "]";
+            }
+            return output;
+        }
     }
 
     public class Face
     {
         public HalfEdge Edge { get; set; }
+        public int Id { get; set;  }
 
         public Face(HalfEdge edge)
         {
+            Id = -1;
             Edge = edge;
+        }
+
+        public List<HalfEdge> Edges
+        {
+            get
+            {
+                // TODO: Find a way to only update this list when needed?
+                List<HalfEdge> edges = new List<HalfEdge>();
+                if (Edge == null) { return edges; }
+
+                HalfEdge nextEdge = Edge;
+                do
+                {
+                    edges.Add(nextEdge);
+                    nextEdge = nextEdge.Next;
+                } while (nextEdge != Edge && nextEdge.Next != null);
+
+                return edges;
+            }
+        }
+
+        override public string ToString()
+        {
+            if (Id == -1)
+            {
+                return "Face";
+            }
+            else
+            {
+                return "Face " + Id;
+            }
         }
     }
 
@@ -198,28 +254,190 @@ public class DCEL
     /// <returns>The half edge with origin at v1</returns>
     public HalfEdge CreateEdge(Vertex v1, Vertex v2)
     {
-        Debug.Log("Creating edge from " + v1.ToString() + " -> " + v2.ToString());
+        // TODO: validate new edge - no intersections with other edges
 
         // Create edges
         HalfEdge e = new HalfEdge(v1);
         HalfEdge eTwin = new HalfEdge(v2, e);
         e.Twin = eTwin;
 
-        // TODO - check for edges that match up to preexisting edges
-        // Update v1's edges
-        if (v1.Edge == null) { v1.Edge = e; }
+        // Update v1 and v2
+        AddEdgeToVertex(v1, e);
+        AddEdgeToVertex(v2, e.Twin);
 
-        // Update v2's edges
-        if (v2.Edge == null) { v2.Edge = e; }
-
-        // Create face if needed
+        // If edge's face is Null, check if we've created a new face
+        if (e.Face == null)
+        {
+            CreateNewFace(e);
+        }
+        else  // Edge was inserted into an existing face
+        {
+            SplitFace(e);
+        }
 
         // Store edges
         edges.Add(e);
         edges.Add(eTwin);
 
+        Debug.Log("Created edges: " + e.ToString() + " and " + eTwin.ToString());
+    
         return e;
     }
+
+    /// <summary>
+    /// Provided a recently added edge, e, will split a face if
+    /// e created a complete circuit
+    /// </summary>
+    /// <param name="e"></param>
+    private void SplitFace(HalfEdge e)
+    {
+        // Only split if e.face and e.twin.face are the same and not null
+        if (e.Face == null || e.Face != e.Twin.Face) { return; }
+        // Verify e makes a complete circuit
+        HalfEdge nextEdge = e;
+        do
+        {
+            nextEdge = nextEdge.Next;
+        } while (nextEdge != null && nextEdge != e);
+
+        if (nextEdge == e)
+        {
+            Face newFace = new Face(e.Twin);
+            nextEdge = e.Twin;
+            do
+            {
+                nextEdge.Face = newFace;
+                nextEdge = nextEdge.Next;
+            } while (nextEdge != e.Twin);
+
+            faces.Add(newFace);
+        }
+    }
+
+    /// <summary>
+    /// If possible, creates a face and assigns it to e or e.Twin
+    /// </summary>
+    /// <param name="e"></param>
+    private void CreateNewFace(HalfEdge e)
+    {
+        HalfEdge nextEdge = e;
+        float sumAngles = 0.0f;
+        int numEdges = 0;
+
+        do
+        {
+            numEdges++;
+            sumAngles += CalculateEdgeAngle(nextEdge);
+            nextEdge = nextEdge.Next;
+        } while (nextEdge != null && nextEdge != e);
+
+        // if e is invalid, check e.Twin
+        if (nextEdge == null)
+        {
+            nextEdge = e.Twin;
+            sumAngles = 0.0f;
+            numEdges = 0;
+
+            do
+            {
+                numEdges++;
+                sumAngles += CalculateEdgeAngle(nextEdge);
+                nextEdge = nextEdge.Next;
+            } while (nextEdge != null && nextEdge != e.Twin);
+        }
+
+        // Complete circuit if nextEdge is not null
+        if (nextEdge != null)
+        {
+            Face newFace;
+            // Use the edge at nextEdge.Next if sumAngles == (numEdges - 2) * 180
+            if (Math.Abs(sumAngles - (numEdges - 2) * 180) < 1)
+            {
+                newFace = new Face(nextEdge.Next);
+            }
+            else
+            {
+                newFace = new Face(nextEdge.Next.Twin);
+            }
+            // Update all edges in the path to their new face
+            if (newFace != null)
+            {
+                nextEdge = newFace.Edge;
+                do
+                {
+                    nextEdge.Face = newFace;
+                    nextEdge = nextEdge.Next;
+                } while (nextEdge != newFace.Edge);
+
+                faces.Add(newFace);
+                newFace.Id = faces.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates the provided Vertex to include the new edge.
+    /// </summary>
+    /// <param name="v"></param>
+    /// <param name="e"></param>
+    private void AddEdgeToVertex(Vertex v, HalfEdge e)
+    {
+         // Verify edge originates at v
+         if (e.Origin != v) { return; }
+
+        // If v doesn't have an edge, add it
+        if (v.Edge == null)
+        {
+            v.Edge = e;
+            return;
+        }
+
+        // Get the list of edges that start or end at this vertex
+        List<HalfEdge> edgesEndingHere = new List<HalfEdge>();
+        HalfEdge nextEdge = v.Edge;  // nextEdge will always leave v
+        
+
+        do
+        {
+            edgesEndingHere.Add(nextEdge.Twin);
+            nextEdge = nextEdge.Twin.Next;
+        } while (nextEdge != null && nextEdge != v.Edge);
+
+
+        float minAngle = 360.0f;
+        int minAngleEdgeIndex = 0;
+
+        for (int i = 0; i < edgesEndingHere.Count; i++)
+        {
+            float angle = (float)CalculateAngle(edgesEndingHere[i].Origin, v, e.Twin.Origin);
+            if (angle < minAngle)
+            {
+                minAngle = angle;
+                minAngleEdgeIndex = i;
+            }
+        }
+
+        // Insert edge into the Next of the min angle edge
+        HalfEdge prevEdge = edgesEndingHere[minAngleEdgeIndex];
+        if (prevEdge.Next == null)
+        {
+            // If prevEdge has no next, we are the first new edge.  
+            // Our twin's next should point to prevEdge
+            e.Twin.Next = prevEdge.Twin;
+        }
+        else
+        {
+            // Otherwise, insert this edge into the next chain
+            e.Twin.Next = prevEdge.Next;
+        }
+        prevEdge.Next = e;
+
+        // Store face onto the added edge  
+        // This face could be split into two faces in a later step of adding the edge
+        e.Face = prevEdge.Face;
+        e.Twin.Face = prevEdge.Face;
+    }
+    
 
     #endregion
 
@@ -312,6 +530,7 @@ public class DCEL
     /// <param name="p"></param>
     private void SplitEdge(HalfEdge e, Vertex p)
     {
+        Debug.Log("Splitting " + e + " at " + p);
         // Perform the following operation
         //         e              e     eNew  ->
         //     ==========  =>   =====P=====
@@ -334,6 +553,9 @@ public class DCEL
         // Store new edges
         edges.Add(eNew);
         edges.Add(eNewTwin);
+
+        // Add an edge to the p
+        p.Edge = eNew;
     }
 
     #endregion

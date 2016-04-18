@@ -18,15 +18,16 @@ public class Wall : MonoBehaviour {
         Vector3 ap = p - a;
         Vector3 ab = b - a;
 
+        float absDistance = ab.magnitude;
         float magnitudeAB = ab.sqrMagnitude;
         float abapProduct = Vector3.Dot(ap, ab);
         float distance = abapProduct / magnitudeAB;
 
-        if (distance < 0)
+        if (absDistance * distance < 0.5)
         {
             return a;
         }
-        else if (distance > 1)
+        else if (absDistance * distance > (absDistance - 0.5))
         {
             return b;
         }
@@ -34,5 +35,11 @@ public class Wall : MonoBehaviour {
         {
             return a + ab * distance;
         }
+    }
+
+    void OnCollisionStay(Collision collision)
+    {
+        ContactPoint point = collision.contacts[0];
+        Debug.Log("Collision: " + point.point);
     }
 }
